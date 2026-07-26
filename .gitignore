@@ -1,0 +1,35 @@
+# ---------------------------------------------------------------------------
+# Secrets — NEVER commit these. Configure them as Railway variables instead.
+# ---------------------------------------------------------------------------
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa*
+id_ed25519*
+*.token
+*_token
+secrets.*
+credentials.*
+
+# GitHub / gh, Claude and jcode auth live on the Railway /data volume, never here.
+.config/gh/
+.jcode/
+.claude/
+
+# ---------------------------------------------------------------------------
+# Local state that must not be tracked
+# ---------------------------------------------------------------------------
+data/
+/data/
+*.log
+node_modules/
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

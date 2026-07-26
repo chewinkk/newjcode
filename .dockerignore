@@ -1,0 +1,23 @@
+# Keep the Docker build context tiny — only start.sh is needed in the image.
+.git
+.gitignore
+.dockerignore
+README.md
+LICENSE
+*.md
+docs/
+
+# Local / secret material must never enter an image layer.
+.env
+.env.*
+*.pem
+*.key
+id_rsa*
+id_ed25519*
+*.log
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
