@@ -142,6 +142,31 @@ else
 fi
 
 # --------------------------------------------------------------------------- #
+# 3b. verify Claude Code (Anthropic's official CLI); install it into the
+#     persistent volume home if missing. The native installer manages a
+#     self-updating launcher under ${HOME}/.local, so installing it here (on
+#     the /data volume) lets it persist and auto-update across restarts.
+# --------------------------------------------------------------------------- #
+if command -v claude >/dev/null 2>&1; then
+  log "Claude Code found at $(command -v claude)"
+else
+  warn "Claude Code not found; installing into ${HOME}/.local ..."
+  if curl -fsSL https://claude.ai/install.sh | bash; then
+    hash -r 2>/dev/null || true
+    if command -v claude >/dev/null 2>&1; then
+      log "Claude Code installed at $(command -v claude)"
+    else
+      warn "Claude Code installer ran but 'claude' is not on PATH yet."
+      warn "Open the terminal and run: curl -fsSL https://claude.ai/install.sh | bash"
+    fi
+  else
+    warn "Claude Code install failed (network policy or outage?)."
+    warn "The IDE will start anyway; retry from the terminal when ready:"
+    warn "  curl -fsSL https://claude.ai/install.sh | bash"
+  fi
+fi
+
+# --------------------------------------------------------------------------- #
 # 4. require authentication — never expose the IDE without a password
 # --------------------------------------------------------------------------- #
 if [ -z "${PASSWORD:-}" ] && [ -z "${HASHED_PASSWORD:-}" ]; then
@@ -165,6 +190,7 @@ log "  HOME         : ${HOME}"
 log "  workspace    : ${WORKSPACE_DIR}"
 log "  code-server  : ${CODE_SERVER_BIN}"
 log "  jcode        : $(command -v jcode 2>/dev/null || echo 'not installed')"
+log "  claude       : $(command -v claude 2>/dev/null || echo 'not installed')"
 log "  git          : $(git --version 2>/dev/null || echo 'missing')"
 log "  gh           : $(gh --version 2>/dev/null | head -n1 || echo 'missing')"
 log "  bind address : 0.0.0.0:${PORT}"

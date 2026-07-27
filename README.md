@@ -3,20 +3,27 @@
 A self-contained, browser-based cloud development environment that runs entirely
 on [Railway](https://railway.com). It gives you **VS Code in the browser**
 ([code-server](https://github.com/coder/code-server)) with a real Linux
-terminal, **[jcode](https://jcode.sh)**, the **GitHub CLI**, **git**, and common
+terminal, **[Claude Code](https://code.claude.com/docs)** (Anthropic's official
+CLI), **[jcode](https://jcode.sh)**, the **GitHub CLI**, **git**, and common
 build utilities — all backed by a persistent Railway volume so your files,
 settings, extensions, and logins survive restarts and redeploys.
 
-You clone your repositories, run terminal commands, use jcode, commit, push, and
-open pull requests **from inside Railway**. Nothing runs on your laptop.
+You clone your repositories, run terminal commands, use Claude Code or jcode,
+commit, push, and open pull requests **from inside Railway**. Nothing runs on
+your laptop.
 
-> [!WARNING]
-> **jcode is a third-party coding-agent harness — it is NOT Anthropic's official
-> Claude Code client.** It is an independent open-source project
-> ([`1jehuang/jcode`](https://github.com/1jehuang/jcode)) that can connect to
-> several model providers (including Claude). Review its source, permissions, and
-> data handling before authenticating it with your Claude account or any other
-> provider. If you want Anthropic's official client, install Claude Code instead.
+> [!NOTE]
+> **Two coding agents are available in this workspace:**
+> - **Claude Code** — Anthropic's official CLI. It reads your repo's
+>   `.claude/` agents, skills, and plugins natively. This is the one to use if
+>   you already have a Claude Code workflow. Installed into `/data` on first
+>   start and kept up to date by its own background updater.
+> - **jcode** — a **third-party** coding-agent harness
+>   ([`1jehuang/jcode`](https://github.com/1jehuang/jcode)), **not** an Anthropic
+>   product, that can drive several providers (Claude, OpenAI, Gemini, local
+>   models) and run agent "swarms." Review its source and data handling before
+>   authenticating it with your Claude account. It does **not** read Claude
+>   Code's `.claude/` configuration.
 
 > [!IMPORTANT]
 > This repository is **only the infrastructure** for the cloud workspace. It does
@@ -31,12 +38,13 @@ open pull requests **from inside Railway**. Nothing runs on your laptop.
 ```text
 Railway container
 ├── code-server            (browser VS Code, password-protected)
+├── Claude Code            (Anthropic's official CLI; reads .claude/ configs)
 ├── jcode                  (third-party AI coding-agent harness)
 ├── GitHub CLI (gh)        (auth + PR workflow)
 ├── Git
 ├── development utilities  (curl, jq, unzip, build-essential, openssh-client…)
 └── mounted volume at /data   (persists across restarts & redeploys)
-    ├── home         → HOME               (dotfiles, shell history, git identity)
+    ├── home         → HOME               (dotfiles, git identity, Claude Code auth + install)
     ├── config       → XDG_CONFIG_HOME     (gh auth, jcode config, app settings)
     ├── share        → XDG_DATA_HOME       (application data)
     ├── state        → XDG_STATE_HOME      (tokens, logs, misc state)
@@ -46,8 +54,8 @@ Railway container
 ```
 
 Your browser talks to code-server over a Railway-generated public domain. Every
-edit, terminal command, jcode session, commit, push, and pull request happens
-inside the Railway container.
+edit, terminal command, Claude Code or jcode session, commit, push, and pull
+request happens inside the Railway container.
 
 ---
 
@@ -56,7 +64,7 @@ inside the Railway container.
 | File             | Purpose                                                                 |
 | ---------------- | ----------------------------------------------------------------------- |
 | `Dockerfile`     | Builds the image: code-server base + git, gh, jcode, and dev utilities. |
-| `start.sh`       | Entrypoint: prepares `/data`, verifies jcode, launches code-server.     |
+| `start.sh`       | Entrypoint: prepares `/data`, verifies jcode + Claude Code, launches code-server. |
 | `railway.json`   | Tells Railway to build from the Dockerfile and run **one** replica.     |
 | `.dockerignore`  | Keeps the build context minimal and secret-free.                        |
 | `.gitignore`     | Prevents committing `.env` files, keys, tokens, and local state.        |
@@ -81,14 +89,21 @@ inside the Railway container.
    into the ephemeral container layer.
 4. **Startup (`start.sh`):** uses strict bash settings, creates the persistent
    directories, repairs volume ownership if Railway mounted a fresh (root-owned)
-   volume, verifies jcode is present (and safely reinstalls it into a persistent
-   path if not), **refuses to start without a password**, and finally `exec`s
-   code-server in the foreground on `0.0.0.0:${PORT}`, opening `/data/workspace`.
+   volume, verifies **jcode** is present (and safely reinstalls it if not),
+   installs **Claude Code** into the `/data` volume on first start if missing,
+   **refuses to start without a password**, and finally `exec`s code-server in
+   the foreground on `0.0.0.0:${PORT}`, opening `/data/workspace`.
 
 The jcode **binary** lives in the image (always present); jcode **state and
 auth** live under `/data` (persisted). A Railway volume mounted at `/data`
-shadows anything written there at build time, which is exactly why the binary is
-baked into the image and only user state is routed to the volume.
+shadows anything written there at build time, which is why the binary is baked
+into the image and only user state is routed to the volume.
+
+**Claude Code** is handled differently on purpose: its native installer manages
+a **self-updating** launcher under `~/.local` (`~/.local/share/claude/versions`),
+so baking a fixed copy into the image would break background updates. Instead
+`start.sh` installs it into the `/data` volume home on first start — there it
+persists, auto-updates itself, and stores credentials at `/data/home/.claude`.
 
 ---
 
@@ -258,6 +273,34 @@ stay logged in across restarts.
 > Claude account. Only do this if you trust the tool. See the warning at the top
 > of this README.
 
+### 7b. Authenticate Claude Code (recommended)
+
+Claude Code is Anthropic's official CLI and — unlike jcode — reads your repo's
+`.claude/` agents, skills, and plugins natively. Verify it and log in:
+
+```bash
+claude --version        # confirm it installed (start.sh installs it on first boot)
+claude doctor           # optional: read-only install/health diagnostics
+```
+
+Then start it in a project and follow the login prompt:
+
+```bash
+cd /data/workspace/<your-repo>
+claude
+```
+
+On first run Claude Code walks you through authentication. Because the terminal
+has **no local browser**, pick the login option and open the printed URL on your
+**own computer**, approve, and paste the code back when prompted. Claude Code
+requires a **Pro, Max, Team, Enterprise, or Console** account (the free plan does
+not include Claude Code). Credentials are stored at `/data/home/.claude`, so you
+stay logged in across restarts.
+
+> Prefer an API key instead of the subscription login? Set `ANTHROPIC_API_KEY`
+> as a Railway variable and Claude Code will prompt once to approve it. (It is a
+> secret — use a Railway variable, never commit it.)
+
 ### 8. Clone the real webapp repository
 
 Clone the repo you actually want to work on **onto the Railway volume**:
@@ -384,11 +427,13 @@ service deploys through its own normal pipeline.
 | VS Code settings + extensions (`/data/code-server`) | ✅  |
 | GitHub CLI auth (`/data/config/gh`)           | ✅        |
 | jcode config + auth (under `/data`)           | ✅        |
+| Claude Code install + auth (`/data/home/.local`, `/data/home/.claude`) | ✅ |
 | Git identity + shell history (`/data/home`)   | ✅        |
 | Anything **outside** `/data`                  | ❌ (rebuilt from the image) |
 
-Because user state lives on the volume and the tools live in the image, you can
-redeploy freely: the image rebuilds, the volume is untouched.
+Because user state lives on the volume and the tools live in the image (Claude
+Code installs itself into the volume and self-updates there), you can redeploy
+freely: the image rebuilds, the volume is untouched.
 
 ---
 

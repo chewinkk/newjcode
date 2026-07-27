@@ -60,6 +60,12 @@ RUN set -eux; \
     chmod -R a+rX /opt/jcode-install 2>/dev/null || true; \
     /usr/local/bin/jcode --version || true
 
+# 4) Claude Code (Anthropic's official CLI) is intentionally NOT baked in here.
+#    Its native installer manages a self-updating launcher under the user's
+#    home (~/.local/share/claude/versions), so start.sh installs it into the
+#    /data volume at runtime, where it persists and can auto-update. Baking a
+#    fixed copy into the image would break background updates.
+
 # --------------------------------------------------------------------------- #
 # Startup script.
 # --------------------------------------------------------------------------- #
